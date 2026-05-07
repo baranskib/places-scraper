@@ -180,5 +180,5 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
-.csv
-.numbers
+*.csv
+*.numbers
