@@ -1,5 +1,7 @@
 # Place-type keywords (Polish). One entry per line starting with "-".
 # Comment out any line with # to skip it on the next run (YAML comments).
+# Used by scraper.py (Playwright). For scraper_api.py, English Place type IDs live
+# in DEFAULT_TYPES there — aligned with this list.
 
 - bar
 - lounge cygarowy
@@ -8,21 +10,21 @@
 - zegarmistrz
 - restauracja
 - kawiarnia
-# - klub nocny
-# - piekarnia
-# - cukiernia
-# - apteka
-# - fryzjer
-# - salon kosmetyczny
-# - stomatolog
-# - weterynarz
-# - hotel
-# - mechanik samochodowy
-# - kwiaciarnia
-# - sklep zoologiczny
-# - sklep rowerowy
-# - księgarnia
-# - pralnia
-# - zakład pogrzebowy
-# - salon tatuażu
-# - sklep z winem
+- klub nocny
+- piekarnia
+- cukiernia
+- apteka
+- fryzjer
+- salon kosmetyczny
+- stomatolog
+- weterynarz
+- hotel
+- mechanik samochodowy
+- kwiaciarnia
+- sklep zoologiczny
+- sklep rowerowy
+- księgarnia
+- pralnia
+- zakład pogrzebowy
+- salon tatuażu
+- sklep z winem
