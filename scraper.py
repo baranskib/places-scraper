@@ -10,20 +10,26 @@ ARIA roles and ``data-item-id`` attributes rather than fragile, hashed
 class names, so it survives most cosmetic Google Maps redesigns.
 
 Run:
-    python scraper.py                 # headless
+    python scraper.py                 # headless; queries = places.yaml × districts.yaml
     python scraper.py --debug         # visible browser, slower, useful when
                                       # selectors stop matching
+    python scraper.py --queries "bar Krowodrza"  # override with explicit strings
+
+Places and districts are read from YAML (recommended), JSON, or plain text — see
+``--places-file`` / ``--districts-file``.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import random
 import re
 import sys
 import time
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import Iterable
 from urllib.parse import quote_plus
 
@@ -43,22 +49,30 @@ from playwright.sync_api import (
 # Configuration
 # ---------------------------------------------------------------------------
 
-GOOGLE_MAPS_URL = "https://www.google.com/maps?hl=en"
-
-
 def maps_search_url(query: str) -> str:
-    """Deep-link into Maps search results (more reliable than the bare homepage)."""
-    return f"https://www.google.com/maps/search/{quote_plus(query)}?hl=en"
+    """Deep-link into Maps search results (more reliable than the omnibox)."""
+    return f"https://www.google.com/maps/search/{quote_plus(query)}?hl=pl"
 
-DEFAULT_QUERIES: tuple[str, ...] = (
-    "restaurants Kraków",
-    # "bars Kraków",
-    # "beauty salon Kraków",
-    # "dentist Kraków",
-    # "gym Kraków",
-)
+PLACES_FILE = "places.yaml"
+DISTRICTS_FILE = "districts.yaml"
 
 OUTPUT_CSV = "krakow_scraped_leads.csv"
+
+# ``div[role="main"]`` matches both the results list and the place drawer; the first
+# ``h1`` is often a label like "Wyniki" / "Results", not a business name.
+SPURIOUS_PLACE_TITLES: frozenset[str] = frozenset(
+    {
+        "wyniki",
+        "results",
+        "search results",
+        "wyszukiwanie",
+        "szukaj",
+        "filtry",
+        "filters",
+        "mapa",
+        "map",
+    }
+)
 
 # Hard caps to keep the run bounded even if Google keeps streaming results.
 MAX_RESULTS_PER_QUERY = 120
@@ -77,6 +91,86 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 log = logging.getLogger("places-scraper")
+
+
+def _strings_from_sequence(data: object, path: Path) -> list[str]:
+    if not isinstance(data, list):
+        raise ValueError(f"{path}: expected a list, got {type(data).__name__}")
+    out: list[str] = []
+    for item in data:
+        if not isinstance(item, str) or not item.strip():
+            continue
+        out.append(item.strip())
+    return out
+
+
+def _load_line_list_file(text: str) -> list[str]:
+    """One entry per non-empty line; lines starting with # are ignored."""
+    out: list[str] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        out.append(stripped)
+    return out
+
+
+def load_string_list(path: Path) -> list[str]:
+    """
+    Load a list of strings from ``path``.
+
+    * ``.yaml`` / ``.yml`` — YAML sequence (supports ``#`` comments).
+    * ``.json`` — JSON array of strings.
+    * Anything else — plain text, one item per line (``#`` starts a comment line).
+    """
+    text = path.read_text(encoding="utf-8")
+    suffix = path.suffix.lower()
+    if suffix in (".yaml", ".yml"):
+        import yaml
+
+        data = yaml.safe_load(text)
+        if data is None:
+            return []
+        return _strings_from_sequence(data, path)
+    if suffix == ".json":
+        data = json.loads(text)
+        return _strings_from_sequence(data, path)
+    return _load_line_list_file(text)
+
+
+def queries_from_places_and_districts(
+    places_path: Path, districts_path: Path
+) -> list[str]:
+    """Cartesian product: ``{place} {district}`` for each pair (district × place)."""
+    places = load_string_list(places_path)
+    districts = load_string_list(districts_path)
+    if not places:
+        raise ValueError(f"{places_path}: no non-empty place strings")
+    if not districts:
+        raise ValueError(f"{districts_path}: no non-empty district strings")
+    return [f"{place} {district}" for district in districts for place in places]
+
+
+def place_details_panel_locator(page: Page) -> Locator:
+    """
+    The summary panel for one POI (address / phone / category rows).
+
+    Maps renders multiple ``role=main`` regions; the list sidebar often exposes an
+    ``h1`` such as "Wyniki" which must not be treated as the place name.
+    """
+    mains = page.locator('div[role="main"]')
+    for hint in (
+        'button[data-item-id="address"]',
+        'button[data-item-id^="phone:tel:"]',
+        'button[jsaction*="category"]',
+        'a[data-item-id="authority"]',
+    ):
+        panel = mains.filter(has=page.locator(hint))
+        if panel.count() > 0:
+            return panel.first
+    if mains.count() > 1:
+        return mains.last
+    return mains.first
 
 
 # ---------------------------------------------------------------------------
@@ -169,7 +263,7 @@ class GoogleMapsScraper:
         )
         self._context = self._browser.new_context(
             user_agent=USER_AGENT,
-            locale="en-US",
+            locale="pl-PL",
             viewport={"width": 1400, "height": 900},
         )
         self.page = self._context.new_page()
@@ -193,7 +287,6 @@ class GoogleMapsScraper:
         assert self.page is not None, "Use the scraper as a context manager."
 
         query_list = list(queries)
-        self._open_maps(query_list[0] if query_list else None)
         for query in query_list:
             try:
                 self.search(query)
@@ -207,46 +300,6 @@ class GoogleMapsScraper:
         return self.results
 
     # -- navigation --------------------------------------------------------
-
-    def _open_maps(self, first_query: str | None) -> None:
-        """Navigate to Google Maps and dismiss the consent banner if shown."""
-        assert self.page is not None
-        url = maps_search_url(first_query) if first_query else GOOGLE_MAPS_URL
-        self.page.goto(url, wait_until="load", timeout=60_000)
-        self._dismiss_consent()
-        human_delay(0.3, 0.7)
-        self._dismiss_consent()
-        self._wait_for_maps_ready()
-        human_delay()
-
-    def _wait_for_maps_ready(self) -> None:
-        """Wait until the Maps app shell or results UI is visible."""
-        assert self.page is not None
-        # Omnibox id / ARIA variants, or results feed — whichever appears first.
-        ready = self.page.locator(
-            "#searchboxinput, "
-            'textarea[aria-label*="Search" i], '
-            'input[aria-label*="Search" i], '
-            'div[role="feed"]'
-        ).first
-        try:
-            ready.wait_for(state="visible", timeout=45_000)
-        except PlaywrightTimeoutError:
-            log.error(
-                "Maps UI did not appear — url=%r title=%r",
-                self.page.url,
-                self.page.title(),
-            )
-            raise
-
-    def _omnibox(self) -> Locator:
-        """Search field at the top of Maps (id/role vary by release)."""
-        assert self.page is not None
-        return self.page.locator(
-            "#searchboxinput, "
-            'textarea[aria-label*="Search" i], '
-            'input[aria-label*="Search" i]'
-        ).first
 
     def _dismiss_consent(self) -> None:
         """Click the EU cookie/consent dialog if Google shows one."""
@@ -279,23 +332,18 @@ class GoogleMapsScraper:
     # -- step 1: search ----------------------------------------------------
 
     def search(self, query: str) -> None:
-        """Type ``query`` into the search box and submit."""
+        """Open results for ``query`` via Maps URL (avoids brittle omnibox selectors)."""
         assert self.page is not None
         log.info("Searching: %s", query)
 
-        box = self._omnibox()
-        box.click()
-        # Clear any previous query before typing the next one.
-        box.fill("")
-        human_delay(0.2, 0.5)
-        box.type(query, delay=random.randint(40, 110))
-        human_delay(0.3, 0.7)
-        self.page.keyboard.press("Enter")
+        self.page.goto(maps_search_url(query), wait_until="load", timeout=60_000)
+        self._dismiss_consent()
+        human_delay(0.25, 0.55)
+        self._dismiss_consent()
 
-        # Either a list (role=feed) or a single matched place (role=main) appears.
         try:
             self.page.wait_for_selector(
-                'div[role="feed"], div[role="main"]', timeout=20_000
+                'div[role="feed"], div[role="main"]', timeout=30_000
             )
         except PlaywrightTimeoutError:
             log.warning("No results panel appeared for %r", query)
@@ -379,6 +427,9 @@ class GoogleMapsScraper:
 
             if business is None or not business.name:
                 continue
+            if self._is_noise_lead(business):
+                log.debug("Skipping UI/chrome row: %r", business.name)
+                continue
             if business.website:
                 # Filter requirement: only leads WITHOUT a website.
                 continue
@@ -397,14 +448,28 @@ class GoogleMapsScraper:
             )
             human_delay(0.5, 1.2)
 
+    @staticmethod
+    def _is_noise_lead(business: Business) -> bool:
+        """Drop headings like "Wyniki" and other non-POI titles."""
+        title = business.name.strip().lower()
+        return title in SPURIOUS_PLACE_TITLES
+
     def _wait_for_details_panel(self) -> None:
-        """Wait until the right-hand details panel has rendered the title."""
+        """Wait until the place summary panel has rendered the title."""
         assert self.page is not None
-        # h1.DUwDvf has been the place title element for a long time, but the
-        # plain h1 inside role=main is a more resilient fallback.
-        self.page.wait_for_selector(
-            'div[role="main"] h1', timeout=10_000
-        )
+        try:
+            self.page.wait_for_selector(
+                'div[role="main"]:has(button[data-item-id="address"]) h1, '
+                'div[role="main"]:has(button[data-item-id^="phone:tel:"]) h1, '
+                'div[role="main"]:has(button[jsaction*="category"]) h1, '
+                'div[role="main"]:has(a[data-item-id="authority"]) h1',
+                timeout=12_000,
+            )
+        except PlaywrightTimeoutError:
+            log.debug(
+                "POI panel hints slow or missing; falling back to first main h1"
+            )
+            self.page.wait_for_selector('div[role="main"] h1', timeout=5_000)
         human_delay(0.4, 0.9)
 
     # -- step 5: extract one business -------------------------------------
@@ -412,7 +477,7 @@ class GoogleMapsScraper:
     def extract_details(self, query: str) -> Business:
         """Read all fields from the open details panel."""
         assert self.page is not None
-        panel = self.page.locator('div[role="main"]').first
+        panel = place_details_panel_locator(self.page)
         biz = Business(query=query)
 
         biz.name = self._safe_text(panel.locator("h1").first)
@@ -549,8 +614,32 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--queries",
         nargs="+",
-        default=list(DEFAULT_QUERIES),
-        help="Override the search queries.",
+        default=None,
+        metavar="Q",
+        help=(
+            "Explicit search strings. If omitted, queries are built from "
+            "--places-file × --districts-file (each place paired with each district)."
+        ),
+    )
+    parser.add_argument(
+        "--places-file",
+        type=Path,
+        default=Path(PLACES_FILE),
+        metavar="PATH",
+        help=(
+            "YAML list, JSON array, or plain-text lines of place keywords "
+            "(.yaml / .json / other). Default: %(default)s."
+        ),
+    )
+    parser.add_argument(
+        "--districts-file",
+        type=Path,
+        default=Path(DISTRICTS_FILE),
+        metavar="PATH",
+        help=(
+            "YAML list, JSON array, or plain-text lines of district names "
+            "(.yaml / .json / other). Default: %(default)s."
+        ),
     )
     return parser.parse_args(argv)
 
@@ -558,17 +647,31 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
 
+    if args.queries is not None:
+        query_list = list(args.queries)
+    else:
+        query_list = queries_from_places_and_districts(
+            args.places_file,
+            args.districts_file,
+        )
+
+    log.info(
+        "Loaded %d queries (%s)",
+        len(query_list),
+        "from CLI" if args.queries is not None else "places × districts files",
+    )
+
     with GoogleMapsScraper(
         headless=not args.debug,
         slow_mo_ms=150 if args.debug else 0,
     ) as scraper:
-        businesses = scraper.run(args.queries)
+        businesses = scraper.run(query_list)
 
     export_csv(businesses, args.output)
     log.info(
         "Done. %d leads without a website across %d queries.",
         len(businesses),
-        len(args.queries),
+        len(query_list),
     )
     return 0
 

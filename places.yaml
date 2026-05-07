@@ -1,0 +1,28 @@
+# Place-type keywords (Polish). One entry per line starting with "-".
+# Comment out any line with # to skip it on the next run (YAML comments).
+
+- bar
+- lounge cygarowy
+- pub
+- siłownia
+- zegarmistrz
+- restauracja
+- kawiarnia
+# - klub nocny
+# - piekarnia
+# - cukiernia
+# - apteka
+# - fryzjer
+# - salon kosmetyczny
+# - stomatolog
+# - weterynarz
+# - hotel
+# - mechanik samochodowy
+# - kwiaciarnia
+# - sklep zoologiczny
+# - sklep rowerowy
+# - księgarnia
+# - pralnia
+# - zakład pogrzebowy
+# - salon tatuażu
+# - sklep z winem
