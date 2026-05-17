@@ -1,0 +1,206 @@
+# Search circles for ``scraper_api.py --cells-file krakow_search_cells.yaml``.
+#
+# Smaller circles (~1.6–2.0 km) + more centres → different top-20 rankings per
+# request, so you surface more unique businesses than a few large disks.
+#
+# Optional ``name`` is written to the CSV ``area`` column (human-readable).
+# If omitted, ``id`` with underscores → spaces is used.
+#
+# Run all cells (deduped ``place_id``, one CSV; overlapping cells merge ``area``):
+#   python scraper_api.py --cells-file krakow_search_cells.yaml
+#   → default 26 types × 34 cells = 884 Nearby API calls (with bundled file).
+#
+# Comment out any ``- id:`` block to skip that cell.
+
+cells:
+  # --- Stare Miasto / Kleparz / Wesoła Zachód
+  - id: stare_miasto_nw
+    name: "Stare Miasto – płn.-zach."
+    lat: 50.0665
+    lng: 19.9310
+    radius_m: 1700
+  - id: stare_miasto_ne
+    name: "Stare Miasto – płn.-wsch."
+    lat: 50.0650
+    lng: 19.9460
+    radius_m: 1700
+  - id: kleparz_grzegorzki_zach
+    name: "Kleparz / Grzegórzki (zach.)"
+    lat: 50.0690
+    lng: 19.9580
+    radius_m: 1800
+
+  # --- Kazimierz / Stradom
+  - id: kazimierz_centre
+    name: "Kazimierz – środek"
+    lat: 50.0510
+    lng: 19.9440
+    radius_m: 1700
+  - id: kazimierz_se
+    name: "Kazimierz – płd.-wsch."
+    lat: 50.0465
+    lng: 19.9520
+    radius_m: 1700
+  - id: stradom_debniki_bridge
+    name: "Stradom / most Dębnicki"
+    lat: 50.0485
+    lng: 19.9350
+    radius_m: 1700
+
+  # --- Podgórze / Zabłocie / Ludwinów
+  - id: podgorze_centre
+    name: "Podgórze – środek"
+    lat: 50.0420
+    lng: 19.9540
+    radius_m: 1800
+  - id: zablocie
+    name: "Zabłocie"
+    lat: 50.0460
+    lng: 19.9680
+    radius_m: 1700
+  - id: ludwinow
+    name: "Ludwinów / Powiśle"
+    lat: 50.0390
+    lng: 19.9380
+    radius_m: 1700
+
+  # --- Krowodrza / Błonia / Nowy Kleparz
+  - id: krowodrza_blonia
+    name: "Krowodrza – Błonia"
+    lat: 50.0790
+    lng: 19.9120
+    radius_m: 1800
+  - id: krowodrza_oliwa
+    name: "Krowodrza – Olsza / Teatr Bagatela"
+    lat: 50.0740
+    lng: 19.9250
+    radius_m: 1700
+  - id: nowy_kleparz
+    name: "Nowy Kleparz"
+    lat: 50.0760
+    lng: 19.9380
+    radius_m: 1700
+  - id: piastow
+    name: "Krowodrza – Piastów / AWF"
+    lat: 50.0820
+    lng: 19.9000
+    radius_m: 1900
+
+  # --- Bronowice / Mydlniki
+  - id: bronowice_centre
+    name: "Bronowice"
+    lat: 50.0900
+    lng: 19.8950
+    radius_m: 1900
+  - id: mydlniki
+    name: "Mydlniki"
+    lat: 50.0820
+    lng: 19.8780
+    radius_m: 2000
+
+  # --- Dębniki / Ruczaj / Zakrzówek
+  - id: debniki_centre
+    name: "Dębniki – środek"
+    lat: 50.0320
+    lng: 19.9180
+    radius_m: 1800
+  - id: ruczaj
+    name: "Ruczaj"
+    lat: 50.0240
+    lng: 19.9280
+    radius_m: 1800
+  - id: zakrzowek_south
+    name: "Łagiewniki / Zakrzówek (płd.)"
+    lat: 50.0120
+    lng: 19.9150
+    radius_m: 2000
+
+  # --- Południe / Swoszowice / Wola Duchacka
+  - id: lagiewniki
+    name: "Łagiewniki"
+    lat: 50.0080
+    lng: 19.9350
+    radius_m: 2000
+  - id: swoszowice
+    name: "Swoszowice"
+    lat: 49.9950
+    lng: 19.9450
+    radius_m: 2100
+  - id: wola_duchacka
+    name: "Wola Duchacka"
+    lat: 50.0180
+    lng: 19.9650
+    radius_m: 2000
+
+  # --- Wschód śródmieścia / Czyżyny
+  - id: grzegorzki_east
+    name: "Grzegórzki (wsch.)"
+    lat: 50.0580
+    lng: 19.9720
+    radius_m: 1800
+  - id: czyzyny
+    name: "Czyżyny"
+    lat: 50.0750
+    lng: 19.9750
+    radius_m: 1900
+  - id: mistrzejowice
+    name: "Mistrzejowice"
+    lat: 50.0820
+    lng: 19.9920
+    radius_m: 2000
+  - id: bienczyce
+    name: "Bieńczyce"
+    lat: 50.0720
+    lng: 20.0050
+    radius_m: 2000
+
+  # --- Nowa Huta
+  - id: nowa_huta_centre
+    name: "Nowa Huta – środek"
+    lat: 50.0680
+    lng: 20.0350
+    radius_m: 2100
+  - id: nowa_huta_west
+    name: "Nowa Huta – zach."
+    lat: 50.0650
+    lng: 20.0150
+    radius_m: 2000
+  - id: nowa_huta_east
+    name: "Nowa Huta – wsch."
+    lat: 50.0700
+    lng: 20.0600
+    radius_m: 2200
+  - id: mistrzejowice_north
+    name: "Mistrzejowice – płn. / os. Wschód"
+    lat: 50.0880
+    lng: 20.0250
+    radius_m: 2000
+
+  # --- Bieżanów / Prokocim / Płaszów
+  - id: prokocim
+    name: "Prokocim"
+    lat: 50.0180
+    lng: 19.9950
+    radius_m: 2000
+  - id: biezanow
+    name: "Bieżanów"
+    lat: 50.0120
+    lng: 20.0200
+    radius_m: 2100
+  - id: plaszow
+    name: "Płaszów / Zabłocie (płd.)"
+    lat: 50.0280
+    lng: 19.9850
+    radius_m: 1900
+
+  # --- Północne obrzeża / Prądnik
+  - id: pradnik_czerwony
+    name: "Prądnik Czerwony"
+    lat: 50.0920
+    lng: 19.9350
+    radius_m: 2000
+  - id: pradnik_bialy
+    name: "Prądnik Biały"
+    lat: 50.0980
+    lng: 19.9150
+    radius_m: 2100
